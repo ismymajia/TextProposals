@@ -221,8 +221,8 @@ int main( int argc, char** argv )
 
   ::google::InitGoogleLogging(argv[0]);
 
-  string model_file   = string("dictnet_vgg_deploy.prototxt");
-  string trained_file = string("dictnet_vgg.caffemodel");
+  string model_file   = string("./vgg_net/dictnet_vgg_deploy.prototxt");
+  string trained_file = string("./vgg_net/dictnet_vgg.caffemodel");
   string label_file   = string("lex.txt");
   int batch_size = 128;
   Classifier classifier(model_file, trained_file, label_file, batch_size);

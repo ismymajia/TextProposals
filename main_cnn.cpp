@@ -141,6 +141,19 @@ std::vector<Prediction> Classifier::Classify(const vector<cv::Mat> &images) {
 }
 
 
+cv::Scalar getColor(int label) {
+    int colors[5][3] = {{0, 0, 255}, {64, 128, 255}, {0, 255, 128}, {192, 128, 0}, {128, 128, 255}};
+    int index = label % 5;
+    return cv::Scalar(colors[index][0], colors[index][1], colors[index][2]);
+
+    /*vector<cv::Scalar> colors = GetColors(max_class);*/
+    //CHECK_LT(label, colors.size());
+    /*return colors[label];*/
+
+
+}
+
+
 /* Diversivication Configurations :                                     */
 /* These are boolean values, indicating whenever to use a particular    */
 /*                                   diversification strategy or not    */
@@ -161,96 +174,100 @@ std::vector<Prediction> Classifier::Classify(const vector<cv::Mat> &images) {
 int main( int argc, char** argv )
 {
 
-  // Params
-  float x_coord_mult              = 0.25; // a value of 1 means rotation invariant
-  float weak_classifier_threshold = 0.01;
-  float cnn_classifier_threshold  = 0.95;
-  int   min_word_lenght           = 3;
-  float nms_IoU_threshold         = 0.2;
-  float nms_I_threshold           = 0.5;
+	// Params
+	float x_coord_mult              = 0.25; // a value of 1 means rotation invariant
+	float weak_classifier_threshold = 0.01;
+	float cnn_classifier_threshold  = 0.95;
+	int   min_word_lenght           = 3;
+	float nms_IoU_threshold         = 0.2;
+	float nms_I_threshold           = 0.5;
 
-  // TextProposals Pipeline configuration
-  bool conf_channels[4]={CHANNEL_R,CHANNEL_G,CHANNEL_B,CHANNEL_I};
-  bool conf_cues[5]={CUE_D,CUE_FGI,CUE_BGI,CUE_G,CUE_S};
+	// TextProposals Pipeline configuration
+	bool conf_channels[4]={CHANNEL_R,CHANNEL_G,CHANNEL_B,CHANNEL_I};
+	bool conf_cues[5]={CUE_D,CUE_FGI,CUE_BGI,CUE_G,CUE_S};
 
-  /* initialize random seed: */
-  srand (time(NULL));
+	/* initialize random seed: */
+	srand (time(NULL));
 
-  double t_cnn_load = (double)getTickCount();
+	double t_cnn_load = (double)getTickCount();
 
-  ::google::InitGoogleLogging(argv[0]);
+	::google::InitGoogleLogging(argv[0]);
 
-  string model_file   = string("dictnet_vgg_deploy.prototxt");
-  string trained_file = string("dictnet_vgg.caffemodel");
-  string label_file   = string("lex.txt");
-  int batch_size = 128;
-  Classifier classifier(model_file, trained_file, label_file, batch_size);
+	string model_file   = string("./vgg_net/dictnet_vgg_deploy.prototxt");
+	string trained_file = string("./vgg_net/dictnet_vgg.caffemodel");
+	string label_file   = string("lex.txt");
+	int batch_size = 128;
+	Classifier classifier(model_file, trained_file, label_file, batch_size);
 
-  t_cnn_load = ((double)getTickCount() - t_cnn_load) / getTickFrequency();
+	t_cnn_load = ((double)getTickCount() - t_cnn_load) / getTickFrequency();
 
-  string in_imagename = string(argv[1]);
-  vector<string> empty_lex; //empty lexicon for the generic recognition case
-  vector<Rect> gt_rects;
-  vector<string> gt_words;
+	string in_imagename = string(argv[1]);
+	vector<string> empty_lex; //empty lexicon for the generic recognition case
+	vector<Rect> gt_rects;
+	vector<string> gt_words;
 
-///// BEGIN loopable code (x image)
+	///// BEGIN loopable code (x image)
 
-  // Stats
-  int nodes_total = 0;
-  int nodes_evaluated = 0;
-  int nodes_rejected_by_inheritance = 0;
-  int nodes_rejected_by_weak_classifier = 0;
-  int nodes_rejected_by_hash = 0;
-  double t_algorithm_0 = (double)getTickCount();
-  double t_mser        = 0;
-  double t_feat        = 0;
-  double t_clustering  = 0;
-  double t_cnn         = 0;
-  double t_sr          = 0;
-  double t_nms         = 0;
+	// Stats
+	int nodes_total = 0;
+	int nodes_evaluated = 0;
+	int nodes_rejected_by_inheritance = 0;
+	int nodes_rejected_by_weak_classifier = 0;
+	int nodes_rejected_by_hash = 0;
+	double t_algorithm_0 = (double)getTickCount();
+	double t_mser        = 0;
+	double t_feat        = 0;
+	double t_clustering  = 0;
+	double t_cnn         = 0;
+	double t_sr          = 0;
+	double t_nms         = 0;
 
-  // Hash table for proposals probabilities by their bbox keys
-  std::map<string, Prediction> pmap;
+	// Hash table for proposals probabilities by their bbox keys
+	std::map<string, Prediction> pmap;
 
-  vector<HCluster> max_clusters;
+	vector<HCluster> max_clusters;
 
-    Mat src, src_vis, src_grey, img, grey, lab_img, gradient_magnitude;
+	Mat src, src_vis, src_grey, img, grey, lab_img, gradient_magnitude, result;
 
-    img = imread(in_imagename);
-    img.copyTo(src);
-    if (VDEBUG)
-      img.copyTo(src_vis);
+	img = imread(in_imagename);
+	cout<< "img.channels ="<<img.channels()<<endl;
+	cout << "img.cols ="<<img.cols<<endl;
+	cout << "img.rows ="<<img.rows<<endl;
+	img.copyTo(src);
+	img.copyTo(result);
+	if (VDEBUG)
+	  img.copyTo(src_vis);
 
-    int delta = 13;
-    int img_area = img.cols*img.rows;
-    Ptr<MSER> cv_mser = MSER::create(delta,(int)(0.00002*img_area),(int)(0.11*img_area),55,0.);
+	int delta = 13;
+	int img_area = img.cols*img.rows;
+	Ptr<MSER> cv_mser = MSER::create(delta,(int)(0.00002*img_area),(int)(0.11*img_area),55,0.);
 
-    cvtColor(img, grey, CV_BGR2GRAY);
-    grey.copyTo(src_grey);
-    cvtColor(img, lab_img, CV_BGR2Lab);
-    gradient_magnitude = Mat_<double>(img.size());
-    get_gradient_magnitude( grey, gradient_magnitude);
+	cvtColor(img, grey, CV_BGR2GRAY);
+	grey.copyTo(src_grey);
+	cvtColor(img, lab_img, CV_BGR2Lab);
+	gradient_magnitude = Mat_<double>(img.size());
+	get_gradient_magnitude( grey, gradient_magnitude);
 
-    vector<Mat> channels;
-    split(img, channels);
-    channels.push_back(grey);
-    int num_channels = channels.size();
+	vector<Mat> channels;
+	split(img, channels);
+	channels.push_back(grey);
+	int num_channels = channels.size();
 
-    if (PYRAMIDS)
-    {
-      for (int c=0; c<num_channels; c++)
-      {
-        Mat pyr;
-        resize(channels[c],pyr,Size(channels[c].cols/2,channels[c].rows/2));
-        channels.push_back(pyr);
-      }
-      /*for (int c=0; c<num_channels; c++)
-      {
-        Mat pyr;
-        resize(channels[c],pyr,Size(channels[c].cols/4,channels[c].rows/4));
-        channels.push_back(pyr);
-      }*/
-    }
+	if (PYRAMIDS)
+	{
+	  for (int c=0; c<num_channels; c++)
+	  {
+	    Mat pyr;
+	    resize(channels[c],pyr,Size(channels[c].cols/2,channels[c].rows/2));
+	    channels.push_back(pyr);
+	  }
+	  /*for (int c=0; c<num_channels; c++)
+	  {
+	    Mat pyr;
+	    resize(channels[c],pyr,Size(channels[c].cols/4,channels[c].rows/4));
+	    channels.push_back(pyr);
+	  }*/
+	}
 
     cout << "Go!" << endl;
 
@@ -505,74 +522,101 @@ int main( int argc, char** argv )
     } // end for each channel
 
 
-  // TODO here do non-maximal suppression of detections in the different dendrograms
+	// TODO here do non-maximal suppression of detections in the different dendrograms
 
-  double t_nms0 = (double)getTickCount();
-  std::sort (max_clusters.begin(), max_clusters.end(), nmsHClusterSort);
-  for (size_t i=0; i<max_clusters.size(); i++)
-  {
-    for (size_t j=max_clusters.size()-1; j>i; j--)
-    {
-      float I_area = (float)(max_clusters[i].rect & max_clusters[j].rect).area();
-      // case :: small boxes with low probability inside bigger boxes with better recognition
-      // TODO here in img_200 you priorize "courthouse" ove ("court" and "house") !!
-      // case :: small boxes with large intersection with bigger boxes with better recognition
-      if ( (I_area > nms_I_threshold * max_clusters[j].rect.area()) &&
-           (max_clusters[i].cnn_probability >= max_clusters[j].cnn_probability) )
-      {
-        max_clusters.erase(max_clusters.begin()+j);
-        continue;
-      }
-      float U_area = (float)(max_clusters[i].rect.area() + max_clusters[j].rect.area() - I_area);
-      float IoU = I_area / U_area;
-      // case :: boxes with very large overlapping and same recognition string
-      if (IoU > nms_IoU_threshold)
-      {
-        if (max_clusters[i].cnn_probability >= max_clusters[j].cnn_probability)
-        {
-          max_clusters.erase(max_clusters.begin()+j);
-          continue;
-        } 
-        else
-        {
-          max_clusters.erase(max_clusters.begin()+i);
-          i--;
-          break;
-        }
-      }
-    }
-  }
-  t_nms += ((double)getTickCount() - t_nms0)/ getTickFrequency();
+	double t_nms0 = (double)getTickCount();
+	std::sort (max_clusters.begin(), max_clusters.end(), nmsHClusterSort);
+	for (size_t i=0; i<max_clusters.size(); i++)
+	{
+	for (size_t j=max_clusters.size()-1; j>i; j--)
+	{
+		float I_area = (float)(max_clusters[i].rect & max_clusters[j].rect).area();
+		// case :: small boxes with low probability inside bigger boxes with better recognition
+		// TODO here in img_200 you priorize "courthouse" ove ("court" and "house") !!
+		// case :: small boxes with large intersection with bigger boxes with better recognition
+		if ( (I_area > nms_I_threshold * max_clusters[j].rect.area()) &&
+		   (max_clusters[i].cnn_probability >= max_clusters[j].cnn_probability) )
+		{
+			max_clusters.erase(max_clusters.begin()+j);
+			continue;
+		}
+		float U_area = (float)(max_clusters[i].rect.area() + max_clusters[j].rect.area() - I_area);
+		float IoU = I_area / U_area;
+		// case :: boxes with very large overlapping and same recognition string
+		if (IoU > nms_IoU_threshold)
+		{
+		if (max_clusters[i].cnn_probability >= max_clusters[j].cnn_probability)
+		{
+			max_clusters.erase(max_clusters.begin()+j);
+			continue;
+		} 
+		else
+		{
+			max_clusters.erase(max_clusters.begin()+i);
+			i--;
+			break;
+		}
+		}
+	}
+	}
+	t_nms += ((double)getTickCount() - t_nms0)/ getTickFrequency();
 
+	int draw_index = 0;
+	int fontFace = cv::FONT_HERSHEY_COMPLEX_SMALL;
+	int thickness = 1.8;
+    double fontScale = 1.0;
+	for (size_t i=0; i<max_clusters.size(); i++)
+	{
+		Rect proposal_roi = max_clusters[i].rect;
+		//rectangle(src, proposal_roi.tl(), proposal_roi.br(), Scalar(0,255,0), 2);
+		cout << KBOLD << KGRN << "    FINAL (" 
+		     << proposal_roi 
+		     << std::fixed << std::setprecision(4) << " "
+		     << max_clusters[i].cnn_probability << " " 
+		     << max_clusters[i].nfa << " " 
+		     << max_clusters[i].cnn_recognition << KRST << endl;
 
-  for (size_t i=0; i<max_clusters.size(); i++)
-  {
-    Rect proposal_roi = max_clusters[i].rect;
-    //rectangle(src, proposal_roi.tl(), proposal_roi.br(), Scalar(0,255,0), 2);
-    cout << KBOLD << KGRN << "    FINAL (" 
-         << proposal_roi 
-         << std::fixed << std::setprecision(4) << " "
-         << max_clusters[i].cnn_probability << " " 
-         << max_clusters[i].nfa << " " 
-         << max_clusters[i].cnn_recognition << KRST << endl;
-  }
+		int xmin = proposal_roi.x;
+		int ymin = proposal_roi.y;
+		int xmax = proposal_roi.x + proposal_roi.width;
+		int ymax = proposal_roi.y + proposal_roi.height;
+		cv::Point pt1 = cv::Point(xmin, ymin);
+		cv::Point pt2 = cv::Point(xmax, ymax);
+		cv::rectangle(result, pt1, pt2, getColor(draw_index), 1, CV_AA);
+		
+		std::ostringstream text_os;
+		text_os << max_clusters[i].cnn_recognition << ":" <<std::setprecision(2)<< max_clusters[i].cnn_probability;
+		std::string text = text_os.str();
+		cv::Point textOrg(xmin, (ymin - 2) > 0 ? (ymin - 5) : ymin);
+		cv::putText(result, text, textOrg, fontFace, fontScale, getColor(draw_index), thickness, CV_AA);
+		
+		draw_index++;
+	}
 
+	cout << " Total Nodes         " << nodes_total << endl;
+	cout << " Nodes evaluated     " << nodes_evaluated << endl;
+	cout << " Nodes inherited     " << nodes_rejected_by_inheritance << endl;
+	cout << " Nodes filtered      " << nodes_rejected_by_weak_classifier << endl;
+	cout << " Nodes hashed        " << nodes_rejected_by_hash << endl << endl;
+	cout << " Time loading model      " << t_cnn_load << " s." << endl;
+	cout << " Time full algorithm     " << ((double)getTickCount()-t_algorithm_0)/ getTickFrequency() << " s." << endl;
+	cout << "      time mser          " << t_mser << " s." << endl;
+	cout << "      time reg feat      " << t_feat << " s." << endl;
+	cout << "      time clustering    " << t_clustering << " s." << endl;
+	cout << "      time cnn           " << t_cnn  << " s." << endl;
+	cout << "      time sr            " << t_sr   << " s." << endl;
+	cout << "      time nms           " << t_nms  << " s." << endl;
 
-  cout << " Total Nodes         " << nodes_total << endl;
-  cout << " Nodes evaluated     " << nodes_evaluated << endl;
-  cout << " Nodes inherited     " << nodes_rejected_by_inheritance << endl;
-  cout << " Nodes filtered      " << nodes_rejected_by_weak_classifier << endl;
-  cout << " Nodes hashed        " << nodes_rejected_by_hash << endl << endl;
-  cout << " Time loading model      " << t_cnn_load << " s." << endl;
-  cout << " Time full algorithm     " << ((double)getTickCount()-t_algorithm_0)/ getTickFrequency() << " s." << endl;
-  cout << "      time mser          " << t_mser << " s." << endl;
-  cout << "      time reg feat      " << t_feat << " s." << endl;
-  cout << "      time clustering    " << t_clustering << " s." << endl;
-  cout << "      time cnn           " << t_cnn  << " s." << endl;
-  cout << "      time sr            " << t_sr   << " s." << endl;
-  cout << "      time nms           " << t_nms  << " s." << endl;
+	int index = in_imagename.find_last_of(".");
+    std::string imgfileName = in_imagename.substr(0, index);
+	cv::imwrite(imgfileName + "_src.jpg", src);
+	cv::imwrite(imgfileName + "_src_vis.jpg", src_vis);
+	cv::imwrite(imgfileName + "_src_grey.jpg", src_grey);
+	cv::imwrite(imgfileName + "_grey.jpg", grey);
+	cv::imwrite(imgfileName + "_lab_img.jpg", lab_img);
+	cv::imwrite(imgfileName + "_gradient_magnitude.jpg", gradient_magnitude);
+	cv::imwrite(imgfileName + "_result.jpg", result);
 
-
-///// END   loopable code (x image)
+	///// END   loopable code (x image)
 
 }

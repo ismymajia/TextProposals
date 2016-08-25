@@ -8,12 +8,15 @@ ENDIF()
 
 find_package(OpenCV REQUIRED)
 
-include_directories ("/usr/src/caffe/include/")
-include_directories ("/usr/src/caffe/.build_release/src/")
-include_directories ("/usr/local/cuda-7.5/include/")
+#include_directories ("/usr/src/caffe/include/")
+include_directories ("/home/kyzhan/deeplearning/code/localization/caffe/distribute/include/")
+#include_directories ("/usr/src/caffe/.build_release/src/")
+include_directories ("/home/kyzhan/deeplearning/code/localization/caffe/.build_release/src/")
+include_directories ("/usr/local/cuda/include/")
 
-link_directories ("/usr/src/caffe/build/lib/")
-link_directories ("/usr/local/cuda-7.5/lib/")
+#link_directories ("/usr/src/caffe/build/lib/")
+link_directories ("/home/kyzhan/deeplearning/code/localization/caffe/distribute/lib/")
+link_directories ("/usr/local/cuda/lib/")
 
 set (EXTRA_LIBS ${EXTRA_LIBS} libcaffe.so -lprotobuf -lglog -lboost_system)
 
